@@ -1,15 +1,15 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"os"
-	"io/ioutil"
+	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"crypto/sha256"
+	"flag"
+	"fmt"
+	"io/ioutil"
 	"log"
-	"crypto/tls"
+	"os"
 	"strings"
 )
 
@@ -76,8 +76,8 @@ func certFromHost(host string) *x509.Certificate {
 }
 
 func check(err error, v ...interface{}) {
-	if (err != nil) {
-		if (v != nil) {
+	if err != nil {
+		if v != nil {
 			log.Fatalln(v...)
 		}
 		log.Fatalln(err)
