@@ -6,7 +6,7 @@ Command line tool to extract a certificate's public key as a pin for HTTP Public
 
 To extract a pin from a local certificate :
 
-``./pkin -cert certificate_path``
+``./pkpin -cert certificate_path``
 
 To extract a pin directly from a server's certificate
 
