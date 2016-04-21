@@ -1,46 +1,40 @@
 package main
 
 import (
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
+	"encoding/base64"
+	"crypto/sha256"
 )
 
-var flagHost = flag.String("host", "", "Extract HPKP pin from the host's certificate")
+var flagHost = flag.String("host", "", "Extract HPKP pins from the host's certificates chain")
 var flagCert = flag.String("cert", "", "Extract HPKP pin from a certificate at the given path")
+var flagPKey = flag.String("pkey", "", "Extract HPKP pin from a DER encoded public key file")
 
 func main() {
 
 	flag.Parse()
 
-	var cert *x509.Certificate
 	if *flagCert != "" {
-		cert = certFromPath(*flagCert)
+		pinFromCertPath(*flagCert)
 	} else if *flagHost != "" {
-		cert = certFromHost(*flagHost)
+		pinsFromHost(*flagHost)
+	} else if *flagPKey != "" {
+		pinFromPublicKeyPath(*flagPKey)
 	} else {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	b, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
-	check(err, "Error while marshaling public key")
-
-	s := base64.StdEncoding.EncodeToString(b)
-
-	digest := sha256.Sum256(b)
-	s = base64.StdEncoding.EncodeToString(digest[:])
-	fmt.Printf("pin-sha256=\"%s\"\n", s)
 }
 
-func certFromPath(path string) *x509.Certificate {
+func pinFromCertPath(path string) {
 	f, err := os.Open(path)
 	check(err, "Error while opening cert at path", path)
 
@@ -50,10 +44,11 @@ func certFromPath(path string) *x509.Certificate {
 	cert, err := x509.ParseCertificate(certData)
 	check(err, "Error while parsing cert")
 
-	return cert
+	pin := pinFromCertificate(cert)
+	fmt.Printf("pin-sha256=\"%s\"\n", pin)
 }
 
-func certFromHost(host string) *x509.Certificate {
+func pinsFromHost(host string) {
 	if !strings.Contains(host, ":") {
 		host = host + ":443"
 	}
@@ -66,13 +61,38 @@ func certFromHost(host string) *x509.Certificate {
 	check(err, "Error while performing TLS handshake")
 
 	state := conn.ConnectionState()
-	if len(state.PeerCertificates) == 0 {
-		log.Fatalln("No certificate returned by the server")
+	if len(state.VerifiedChains) == 0 {
+		log.Fatalln("No valid certificate returned by the server")
 	}
 
-	cert := state.PeerCertificates[0]
+	chain := state.VerifiedChains[0]
+	for idx, cert := range chain {
+		pin := pinFromCertificate(cert)
+		fmt.Printf("%d) %s\n\tpin-sha256=\"%s\"\n\n", idx, cert.Subject.CommonName, pin)
+	}
+}
 
-	return cert
+func pinFromPublicKeyPath(path string) {
+	f, err := os.Open(path)
+	check(err, "Error while opening public key at path", path)
+
+	pkeyData, err := ioutil.ReadAll(f)
+	check(err, "Error reading public key")
+
+	pin := pinFromPublicDERPKey(pkeyData)
+	fmt.Printf("pin-sha256=\"%s\"\n", pin)
+}
+
+func pinFromCertificate(cert *x509.Certificate) string {
+	b, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+	check(err, "Error while marshaling public key")
+
+	return pinFromPublicDERPKey(b)
+}
+
+func pinFromPublicDERPKey(b []byte) string {
+	digest := sha256.Sum256(b)
+	return base64.StdEncoding.EncodeToString(digest[:])
 }
 
 func check(err error, v ...interface{}) {

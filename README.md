@@ -8,6 +8,10 @@ To extract a pin from a local certificate :
 
 ``./pkpin -cert certificate_path``
 
-To extract a pin directly from a server's certificate
+To extract pins directly from a server's certificates chain
 
 ``./pkpin -host google.com``
+
+To extract pin from a DER encoded public key
+
+``./pkpin -pkey public_key_path``
